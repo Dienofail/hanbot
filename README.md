@@ -1,4 +1,4 @@
-# hanbot
+# Dienofail's hanbot scripts repository
 Hanbot scripts by dienofail
 
 Currently supported:
