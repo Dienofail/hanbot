@@ -4,7 +4,7 @@ local pred = module.internal("pred");
 local ts = module.internal('TS');
 local common = module.load("delise", "common");
 local ObjMinion_Type = objManager.minions
-local version = 0.02
+local version = 0.03
 
 local spellQ = {
   range = 625,
@@ -254,6 +254,10 @@ local q_module = {
 
 }
 
+function QorWready()
+  return (player:spellSlot(0).state == 0 or player:spellSlot(1).state == 0)
+end
+
 -- Try to EQ when casting E
 function q_module.CanCast()
   return player:spellSlot(0).state == 0
@@ -401,7 +405,7 @@ local function CombatFormSwap()
   local SpiderQTarget = GetTargetSpiderQ()
   local HumanTarget = GetHumanTarget()
 
-  if common.IsValidTarget(SpiderQTarget) and SpiderQTarget.pos:dist(player.pos) < 450 and SpiderCombatReady and HumanCombatReady and isSpider and r_module.CanCast() then
+  if common.IsValidTarget(SpiderQTarget) and SpiderQTarget.pos:dist(player.pos) < 750 and SpiderCombatReady and HumanCombatReady and isSpider and r_module.CanCast() then
     if menu.d.drawDebug:get() then 
       print("Swap1")
     end
@@ -411,12 +415,12 @@ local function CombatFormSwap()
       print("Swap2")
     end
     r_module.TryCast()
-  elseif not HumanCombatReady and SpiderCombatReady and not isSpider and r_module.CanCast() then
+  elseif not HumanCombatReady and not QorWready() and SpiderCombatReady and not isSpider and r_module.CanCast() then
     if menu.d.drawDebug:get() then 
       print("Swap3")
     end
     r_module.TryCast()
-  elseif not SpiderCombatReady and HumanReady and isSpider and r_module.CanCast() then 
+  elseif not QorWready() and not SpiderCombatReady and HumanReady and isSpider and r_module.CanCast() then 
     if menu.d.drawDebug:get() then 
       print("Swap4")
     end
@@ -450,13 +454,14 @@ local function Clear()
 
   for i = 0, ObjMinion_Type.size[TEAM_NEUTRAL] - 1 do
         local mob = ObjMinion_Type[TEAM_NEUTRAL][i]
-
-        if isSpider and not SpiderReady and HumanReady and EnoughHumanQMana and EnoughHumanWMana then 
-          player:castSpell("self",3)
-        elseif not isSpider and SpiderReady and not HumanReady then 
-          player:castSpell("self",3)
-        elseif not isSpider and not EnoughHumanWMana and not EnoughHumanQMana then 
-          player:castSpell("self",3)
+        if menu.r.rswapfarm:get() then
+          if isSpider and not QorWready() and HumanReady and EnoughHumanQMana and EnoughHumanWMana then 
+            player:castSpell("self",3)
+          elseif not isSpider and SpiderReady and not QorWready() then 
+            player:castSpell("self",3)
+          elseif not isSpider and not EnoughHumanWMana and not EnoughHumanQMana then 
+            player:castSpell("self",3)
+          end 
         end 
  
 
@@ -489,12 +494,13 @@ local function Clear()
 
   for i = 0, ObjMinion_Type.size[TEAM_ENEMY] - 1 do
         local mob = ObjMinion_Type[TEAM_ENEMY][i]
-
-        if isSpider and not SpiderReady and HumanReady and EnoughHumanQMana and EnoughHumanWMana then 
-          player:castSpell("self",3)
-        elseif not isSpider and SpiderReady and not HumanReady then 
-          player:castSpell("self",3)
-        end 
+        if menu.r.rswapfarm:get() then 
+          if isSpider and not QorWready() and HumanReady and EnoughHumanQMana and EnoughHumanWMana then 
+            player:castSpell("self",3)
+          elseif not isSpider and SpiderReady and not QorWready() then 
+            player:castSpell("self",3)
+          end
+        end
  
 
         if isSpider and player:spellSlot(0).state == 0 then 
@@ -713,7 +719,9 @@ local function OnTick()
     elseif isSpider then 
       CombatSpider()
     end
-    CombatFormSwap()
+    if menu.r.rswap:get() then 
+      CombatFormSwap()
+    end 
   end
 
   if (orb.menu.lane_clear:get()) then 
