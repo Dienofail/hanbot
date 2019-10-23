@@ -4,7 +4,7 @@ local pred = module.internal("pred");
 local ts = module.internal('TS');
 local common = module.load("delise", "common");
 local ObjMinion_Type = objManager.minions
-local version = 0.03
+local version = 0.04
 
 local spellQ = {
   range = 625,
@@ -24,6 +24,8 @@ local spellW = {
 local spellAA = {
   range = 425
 }
+
+local HumanETrace = 870
 
 local spellE = {
   range = 1075,
@@ -74,9 +76,9 @@ local RTruecd = 4000
 ]]--
 
 local HumanTrueQcd, SpiderTrueQcd = 6, 6
-local HumanTrueWcd, SpiderTrueWcd = 12, 12
-local HumanTrueEcd = {14, 13, 12, 11, 10}
-local SpiderTrueEcd = {26, 24, 22, 20, 18} 
+local HumanTrueWcd, SpiderTrueWcd = 10, 10
+local HumanTrueEcd = {12, 11.5, 11, 10.5, 10}
+local SpiderTrueEcd = {22, 21, 20, 29, 18} 
 local RTruecd = 40
 local RappelTimer = 0
 local RappelStartTimer = 0
@@ -124,6 +126,7 @@ menu.w:boolean("useSpiderWFarm", "Spider W farm usage", true)
 menu:menu("e", "E Settings")
 menu.e:header("egeneral", "E usage in Combat mode")
 menu.e:boolean("useHumanE", "Use Human E if hittable at all times", true)
+menu.e:boolean("SpiderESlowPred", "Use slow prediction for Human E", true)
 menu.e:boolean("useHumanECC", "Autochain CC using Human E (on all times)", true)
 menu.e:boolean("useSpiderE", "Use Spider E ", true)
 menu.e:slider("SpiderEDistance","Minimum distance from target to use rappel", 480, 175, 750, 25)
@@ -153,10 +156,10 @@ ts.load_to_menu();
 
 local CalculateRealCD = function(total_cd)
   current_cd = player.percentCooldownMod
+  print(current_cd)
   real_cd = total_cd - total_cd * current_cd --see if this is correct code
   return real_cd
 end
-
 
 
 local TargetSelectionQ = function(res, obj, dist)
@@ -306,17 +309,41 @@ function e_module.CanCast()
   return player:spellSlot(2).state == 0
 end
 
+function SlowPredE(target, segment)
+    if segment.startPos:dist(segment.endPos) < HumanETrace then 
+      return true
+    end 
+
+    if pred.trace.linear.hardlock(spellE, segment, target) then 
+      return true 
+    end
+
+    if pred.trace.linear.hardlockmove(spellE, segment, target) then 
+      return true
+    end
+
+    if pred.trace.newpath(target, 0.033, 0.500) then 
+      return true
+    end
+end
+
 function e_module.TryCast(target)
   local segment = pred.linear.get_prediction(spellE, target, player)
-  if segment then
-    local coll = pred.collision.get_prediction(spellE, segment, target)
-    if not coll then
-      local endPos = segment.endPos
-      if endPos:dist(segment.startPos) > spellE.range then
-        return
+  if menu.e.SpiderESlowPred:get() then 
+      if SlowPredE(target, segment) and common.IsValidTarget(target) then 
+          player:castSpell("pos", 2, vec3(segment.endPos.x, target.y, segment.endPos.y))
       end
-      player:castSpell("pos", 2, vec3(endPos.x, target.y, endPos.y))
-    end
+  else
+      if segment then
+        local coll = pred.collision.get_prediction(spellE, segment, target)
+        if not coll then
+          local endPos = segment.endPos
+          if endPos:dist(segment.startPos) > spellE.range then
+            return
+          end
+          player:castSpell("pos", 2, vec3(endPos.x, target.y, endPos.y))
+        end
+      end
   end
 end
 
