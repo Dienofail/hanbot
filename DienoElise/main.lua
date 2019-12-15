@@ -4,7 +4,7 @@ local pred = module.internal("pred");
 local ts = module.internal('TS');
 local common = module.load("delise", "common");
 local ObjMinion_Type = objManager.minions
-local version = 0.04
+local version = 0.05
 
 local spellQ = {
   range = 625,
@@ -309,7 +309,11 @@ function e_module.CanCast()
   return player:spellSlot(2).state == 0
 end
 
-function SlowPredE(target, segment)
+function SlowPredE(target, segment) 
+    if pred.collision.get_prediction(spellE, segment, target) then 
+      return false
+    end  
+
     if segment.startPos:dist(segment.endPos) < HumanETrace then 
       return true
     end 
