@@ -1,6 +1,6 @@
 return {
   id = "daphelios",
-  name = "Dieno Aphelios",
+  name = "DienoAphelios",
   riot = true,
   type = "Champion",
   load = function()
