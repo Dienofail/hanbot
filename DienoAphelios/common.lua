@@ -71,8 +71,32 @@ function common.GetPercentPar(obj)
   return (obj.par / obj.maxPar) * 100
 end
 
+
+function common.ResetOrbDelay(delay)
+  if delay and delay >= 0 then 
+    --common.DelayAction(function() orb.core.reset() orb.core.set_pause_move(0) orb.core.set_pause_attack(0) end, delay)
+    common.DelayAction(function() orb.core.set_pause(0) orb.core.set_pause_move(0) orb.core.set_pause_attack(0) end, delay)
+  end 
+end 
+ 
+
+function common.ResetAllOrbDelay(delay)
+  if delay and delay >= 0 then 
+    --common.DelayAction(function() orb.core.reset() orb.core.set_pause_move(0) orb.core.set_pause_attack(0) end, delay)
+    common.DelayAction(function() orb.core.reset() orb.core.set_pause(0) orb.core.set_pause_move(0) orb.core.set_pause_attack(0) end, delay)
+  end 
+end 
+
+function common.ResetOrb()
+    --common.DelayAction(function() orb.core.reset() orb.core.set_pause_move(0) orb.core.set_pause_attack(0) end, delay)
+    --orb.core.reset()
+    orb.core.set_pause(0) 
+    orb.core.set_pause_move(0) 
+    orb.core.set_pause_attack(0) 
+end 
+
 function common.CheckBuffType(obj, bufftype)
-  if obj then
+  if obj and obj.buffManager and obj.buffManager.count > 0 then
     for i = 0, obj.buffManager.count - 1 do
       local buff = obj.buffManager:get(i)
       if buff and buff.valid and buff.type == bufftype and (buff.stacks > 0 or buff.stacks2 > 0) then
@@ -104,7 +128,7 @@ end
 
 
 function common.CheckBuff(obj, buffname)
-  if obj then
+  if obj and obj.buffManager and obj.buffManager.count > 0 then
     for i = 0, obj.buffManager.count - 1 do
       local buff = obj.buffManager:get(i)
 
@@ -116,7 +140,7 @@ function common.CheckBuff(obj, buffname)
 end
 
 function common.CheckBuffWithTimeEnd(obj, buffname)
-  if obj then
+  if obj and obj.buffManager and obj.buffManager.count > 0  then
     for i = 0, obj.buffManager.count - 1 do
       local buff = obj.buffManager:get(i)
 
@@ -129,6 +153,20 @@ function common.CheckBuffWithTimeEnd(obj, buffname)
   end
 end
 
+
+function common.CheckBuffWithTimeEndOwner(obj, buffname)
+  if obj and obj.buffManager and obj.buffManager.count > 0  then
+    for i = 0, obj.buffManager.count - 1 do
+      local buff = obj.buffManager:get(i)
+
+      if buff and buff.valid and buff.name == buffname and (buff.stacks > 0 or buff.stacks2 > 0) and buff.source.ptr == player.ptr then
+        if game.time <= buff.endTime then
+          return true, buff.endTime
+        end 
+      end
+    end
+  end
+end
 
 -- Returns @target health+shield
 local yasuoShield = {100, 105, 110, 115, 120, 130, 140, 150, 165, 180, 200, 225, 255, 290, 330, 380, 440, 510}
@@ -295,7 +333,7 @@ common.enum.buff_types = {
 
 -- Returns true if @unit has buff.type btype
 
-local hard_cc = {
+common.hard_cc = {
   [5] = true, -- stun
   [8] = true, -- taunt
   [11] = true, -- snare
@@ -345,6 +383,18 @@ function common.IsPlayerUnderTurret()
   return false
 end
 
+function common.GetMouseDirection()
+  local direction = vec2(mousePos2D.x - player.pos2D.x, mousePos2D.y - player.pos2D.y)
+  --local direction = vec2(player.pos2D.x - mousePos2D.x, player.pos2D.y-mousePos2D.y)
+  return common.Normalize(direction)
+end
+
+function common.MoveToNormalizeMouse()
+  mouse2Dmove = common.GetMouseDirection()
+  player:move(vec3(player.pos.x - mouse2Dmove.x*200 , player.pos.z, player.pos.y - mouse2Dmove.y*200))
+end
+
+
 function common.GetDirection(predPos)
   local direction = vec2(predPos.endPos.x - predPos.startPos.x, predPos.endPos.y - predPos.startPos.y)
   return common.Normalize(direction)
@@ -367,6 +417,16 @@ function common.IsImmobileBuffer(unit, delay)
     if  BuffeTipe[5] or BuffeTipe[8] or BuffeTipe[11] or BuffeTipe[18] or BuffeTipe[24] or BuffeTipe[29] then            
         return true
     end            
+end
+
+function common.IsHardCC(object)
+  for i, bool in pairs(common.immobile_cc) do
+    if common.CheckBuffType(object, i) then
+      return true
+    end
+  end
+
+  return false
 end
 
 
@@ -510,6 +570,7 @@ function common.GetAllyHeroesInRange(range, pos)
   return h
 end
 
+
 function common.tablelength(T)
   local count = 0
   for _ in pairs(T) do count = count + 1 end
@@ -528,6 +589,16 @@ function common.GetEnemyHeroesInRange(range, pos)
     end
   end
   return h
+end
+
+function common.CountEnemyHeroesInRange(range,pos)
+  local pos = pos or player
+  local range = range or 1500 
+  if range and pos then   
+    return(common.tablelength(common.GetEnemyHeroesInRange(range,pos)))
+  else 
+    return 0
+  end 
 end
 
 -- Returns table and number of objects near @pos
