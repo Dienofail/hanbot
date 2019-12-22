@@ -4,7 +4,7 @@ local pred = module.internal("pred");
 local ts = module.internal('TS');
 local common = module.load("daphelios", "common");
 local ObjMinion_Type = objManager.minions
-local version = "0.04"
+local version = "0.05"
 
 --Full changelogs are on my discord. Visit hanbot forums, my github, or pm dienofail#1100 on discord if you need an invite.
 
@@ -135,6 +135,8 @@ local TimeSinceLastLongestPause = 0
 local TimeSinceLastLongestAttackPause = 0 
 local CrescendumCD = {9,8.25,7.5,6.75,6,6}
 local IsSeverumQ = false
+local LastSwapMain = nil 
+local LastSwapAlt = nil 
 local MoonlightDamage = {125, 175, 225}
 local CrescendumBuffs = 0 
 local CalibrumR, SeverumR, GravitumR, InfernumR, CrescendumR = true,true,true,true,true
@@ -343,19 +345,19 @@ function CheckSpellState()
 end
 
 local function MainGunReady()
-  if MainGun == "Gravitum" and GravitumR then 
+  if MainGun == "Gravitum" and player:spellSlot(0).state == 0 then 
     return true 
   end 
-  if MainGun == "Severum" and SeverumR then 
+  if MainGun == "Severum" and player:spellSlot(0).state == 0 then 
     return true 
   end 
-  if MainGun == "Calibrum" and CalibrumR then 
+  if MainGun == "Calibrum" and player:spellSlot(0).state == 0 then 
     return true 
   end 
-  if MainGun == "Infernum" and InfernumR then 
+  if MainGun == "Infernum" and player:spellSlot(0).state == 0 then 
     return true 
   end 
-  if MainGun == "Crescendum" and CrescendumR then 
+  if MainGun == "Crescendum" and player:spellSlot(0).state == 0 then 
     return true 
   end 
 end
@@ -396,21 +398,26 @@ local function AltCD()
   end 
 end  
 
-local function MainCD()
-  if MainGunReady then return 0 end 
-  if MainGun == "Severum" and SeverumT - game.time >= 0 then 
-    return SeverumT - game.time
-  elseif MainGun == "Calibrum" and CalibrumT - game.time >= 0 then 
-    return CalibrumT - game.time
-  elseif MainGun == "Gravitum" and GravitumT - game.time >= 0 then 
-    return GravitumT - game.time
-  elseif MainGun == "Crescendum" and CrescendumT - game.time >= 0 then 
-    return CrescendumT - game.time
-  elseif MainGun == "Infernum" and InfernumT - game.time >= 0 then 
-    return InfernumT - game.time 
-  else return 0 
-  end 
-end  
+-- local function MainCD()
+--   if MainGunReady then return 0 end 
+--   if MainGun == "Severum" and SeverumT - game.time >= 0 then 
+--     return SeverumT - game.time
+--   elseif MainGun == "Calibrum" and CalibrumT - game.time >= 0 then 
+--     return CalibrumT - game.time
+--   elseif MainGun == "Gravitum" and GravitumT - game.time >= 0 then 
+--     return GravitumT - game.time
+--   elseif MainGun == "Crescendum" and CrescendumT - game.time >= 0 then 
+--     return CrescendumT - game.time
+--   elseif MainGun == "Infernum" and InfernumT - game.time >= 0 then 
+--     return InfernumT - game.time 
+--   else return 0 
+--   end 
+-- end  
+
+local function MainCD() 
+  if MainGunReady() then return 0 end 
+  return player:spellSlot(0).cooldown
+end
 
 function CountUltHit(PredictedPos, range)
   counter = 0 
@@ -497,7 +504,7 @@ local function CountGravitumBuffs(range)
       if obj and obj.buffManager and obj.buffManager.count then 
         for i = 0, obj.buffManager.count - 1 do
           local buff = obj.buffManager:get(i)
-          if buff and buff.valid and buff.name =="ApheliosGravitumDebuff" and player.pos:dist(obj.pos) < range and buff.source.ptr == player.ptr and (buff.stacks > 0 or buff.stacks2 > 0) and (buff.endTime - buff.startTime <= 0.4) then
+          if buff and buff.valid and buff.name =="ApheliosGravitumDebuff" and player.pos:dist(obj.pos) < range and buff.source.ptr == player.ptr and (buff.stacks > 0 or buff.stacks2 > 0) and (buff.endTime - game.time >= 0.15) then
             buff_counter = buff_counter + 1
           end
         end
@@ -654,7 +661,7 @@ local function CountInTurretRangeWithGravitum()
   for _, obj in ipairs(common.GetEnemyHeroes()) do
     if obj and common.IsValidTarget(obj) and obj.pos then 
       isbuff, endtime = common.CheckBuffWithTimeEnd(obj, "ApheliosGravitumDebuff") 
-      if TurretRangeCheck(obj) and isbuff and endtime - game.time > 0.35 then 
+      if TurretRangeCheck(obj) and isbuff and endtime - game.time >= 0.35 then 
         counter = counter + 1
       end
     end
@@ -669,15 +676,24 @@ local function HotKeyChecks()
   CalibrumRTarget = GetTargetR()
 
 
-  if menu.misc.snarenow:get() and MainGun == "Gravitum" and player:spellSlot(0).state == 0 then 
+  if menu.misc.snarenow:get() and MainGun == "Gravitum" and player:spellSlot(0).state == 0 and CountGravitumBuffsNow(20000) > 0 then 
     player:castSpell("self", 0)
     orb.core.set_server_pause()
+    if menu.d.printDebug:get() and game.time - lastDebugPrint > 0.4 then
+        print("Snaring now due to manual grav!")
+    end
   elseif menu.misc.snarenow:get() and AltGun == "Gravitum" and AltGunReady() and CountGravitumBuffsNow(20000) > 0 and player:spellSlot(1).state == 0 then 
     player:castSpell("self", 1)
     orb.core.set_server_pause()
+    if menu.d.printDebug:get() and game.time - lastDebugPrint > 0.01 then
+        print("Swapping now due to manual grav 1!")
+    end
   elseif menu.misc.snarenow:get() and AltGun == "Gravitum"  and AltGunReady() and CountGravitumBuffsNow(20000) == 0 and player:spellSlot(1).state == 0 then 
     player:castSpell("self", 1)
     orb.core.set_server_pause()    
+    if menu.d.printDebug:get() and game.time - lastDebugPrint > 0.01 then
+        print("Swapping now due to manual grav 2!")
+    end
   end 
 
   if menu.misc.turret:get() and MainGun == "Crescendum" then 
@@ -716,7 +732,7 @@ local function Combo()
       if obj and common.IsValidTarget(obj) then 
         for i = 0, obj.buffManager.count - 1 do
           local buff = obj.buffManager:get(i)
-          if buff and buff.valid and buff.name == "aphelioscalibrumbonusrangedebuff" and  buff.source == player and (buff.stacks > 0 or buff.stacks2 > 0) then
+          if buff and buff.valid and buff.name == "aphelioscalibrumbonusrangedebuff" and  buff.source == player and (buff.stacks > 0 or buff.stacks2 > 0) and buff.endTime >= game.time then
             --print("Buff " .. buff.name .. "active")
             -- if common.IsValidTarget(AATarget) and common.IsValidTarget(CalibrumAATarget) and common.IsValidTarget(CalibrumQTarget) and obj.ptr == AATarget.ptr or obj.ptr == CalibrumQTarget.ptr or obj.ptr == CalibrumAATarget.ptr or obj.ptr == CalibrumQTarget.ptr then 
             --   player:attack(obj)
@@ -732,32 +748,6 @@ local function Combo()
       player:attack(best_attack_obj)
       orb.core.set_server_pause_attack()
     end
-  elseif not common.IsValidTarget(AATarget) and AltGun == "Calibrum" and IsSafe(300) then 
-    for _, obj in ipairs(common.GetEnemyHeroes()) do
-      if obj and common.IsValidTarget(obj) then 
-        for i = 0, obj.buffManager.count - 1 do
-          local buff = obj.buffManager:get(i)
-          if buff and buff.valid and buff.name == "aphelioscalibrumbonusrangedebuff" and  buff.source == player and (buff.stacks > 0 or buff.stacks2 > 0) then
-            --print("Buff " .. buff.name .. "active")
-            player:castSpell("self", 1)
-            orb.core.set_server_pause()
-          end
-        end
-      end
-    end
-  elseif AltGun == "Calibrum" and IsSafe(400) then 
-    for _, obj in ipairs(common.GetEnemyHeroes()) do
-      if obj and common.IsValidTarget(obj) and (obj == CalibrumRTarget or obj==CalibrumQTarget or obj == AATarget) then 
-        for i = 0, obj.buffManager.count - 1 do
-          local buff = obj.buffManager:get(i)
-          if buff and buff.valid and buff.name == "aphelioscalibrumbonusrangedebuff" and  buff.source == player and (buff.stacks > 0 or buff.stacks2 > 0) then
-            --print("Buff " .. buff.name .. "active")
-            player:castSpell("self", 1)
-            orb.core.set_server_pause()
-          end
-        end
-      end
-    end    
   end 
 
   --Severum logic 
@@ -816,25 +806,25 @@ local function Combo()
     end  
  
 
-    if menu.c.gravitumOne:get() and common.IsValidTarget(CalibrumAATarget) and common.tablelength(common.GetEnemyHeroesInRange(685, player)) < 2 and common.CheckBuff(CalibrumAATarget, "ApheliosGravitumDebuff") and not common.IsImmobileBuffer(CalibrumAATarget, 0.2) then
+    if menu.c.gravitumOne:get() and common.IsValidTarget(CalibrumAATarget) and common.tablelength(common.GetEnemyHeroesInRange(685, player)) < 2 and common.CheckBuffWithTimeEndOwner(CalibrumAATarget, "ApheliosGravitumDebuff") and not common.IsImmobileBuffer(CalibrumAATarget, 0.2) then
       player:castSpell("self", 0)
       orb.core.set_server_pause()
     end
-    if menu.c.gravitumOne:get() and common.IsValidTarget(AATarget) and common.tablelength(common.GetEnemyHeroesInRange(685, player)) < 2 and common.CheckBuff(AATarget, "ApheliosGravitumDebuff") and not common.IsImmobileBuffer(AATarget, 0.2) then
+    if menu.c.gravitumOne:get() and common.IsValidTarget(AATarget) and common.tablelength(common.GetEnemyHeroesInRange(685, player)) < 2 and common.CheckBuffWithTimeEndOwner(AATarget, "ApheliosGravitumDebuff") and not common.IsImmobileBuffer(AATarget, 0.2) then
       player:castSpell("self", 0)
       orb.core.set_server_pause()
     end
-    if menu.c.gravitumOne:get() and common.IsValidTarget(CalibrumQTarget) and common.tablelength(common.GetEnemyHeroesInRange(685, player)) < 2 and common.CheckBuff(CalibrumQTarget, "ApheliosGravitumDebuff") and not common.IsImmobileBuffer(CalibrumQTarget, 0.2) then
-      player:castSpell("self", 0)
-      orb.core.set_server_pause()
-    end
-
-    if menu.c.gravitumOne:get() and (common.tablelength(common.GetEnemyHeroesInRange(250))<2 or common.tablelength(common.GetEnemyHeroesInRange(485))<3 or common.tablelength(common.GetEnemyHeroesInRange(1000))<4) and common.CheckBuff(AATarget, "ApheliosGravitumDebuff")  then 
+    if menu.c.gravitumOne:get() and common.IsValidTarget(CalibrumQTarget) and common.tablelength(common.GetEnemyHeroesInRange(685, player)) < 2 and common.CheckBuffWithTimeEndOwner(CalibrumQTarget, "ApheliosGravitumDebuff") and not common.IsImmobileBuffer(CalibrumQTarget, 0.2) then
       player:castSpell("self", 0)
       orb.core.set_server_pause()
     end
 
-    if common.IsValidTarget(AATarget) and menu.c.gravitumOne:get() and player.pos:dist(AATarget.pos) < 435 and player.pos:dist(AATarget.pos) > 550 and common.tablelength(common.GetEnemyHeroesInRange(1200,AATarget.pos)) < 3 and common.CheckBuff(AATarget, "ApheliosGravitumDebuff") then 
+    if menu.c.gravitumOne:get() and common.IsValidTarget(CalibrumAATarget) and (common.tablelength(common.GetEnemyHeroesInRange(250))<2 or common.tablelength(common.GetEnemyHeroesInRange(485))<3 or common.tablelength(common.GetEnemyHeroesInRange(1000))<4) and common.CheckBuffWithTimeEndOwner(CalibrumAATarget, "ApheliosGravitumDebuff")  then 
+      player:castSpell("self", 0)
+      orb.core.set_server_pause()
+    end
+
+    if common.IsValidTarget(AATarget) and menu.c.gravitumOne:get() and player.pos:dist(AATarget.pos) < 435 and player.pos:dist(AATarget.pos) > 550 and common.tablelength(common.GetEnemyHeroesInRange(1200,AATarget.pos)) < 3 and common.CheckBuffWithTimeEndOwner(AATarget, "ApheliosGravitumDebuff") then 
       player:castSpell("self", 0)
       orb.core.set_server_pause()
     end 
@@ -855,6 +845,8 @@ local function CheckWeapons()
     MainGun = "Infernum"
   elseif player:spellSlot(0).name == "ApheliosCrescendumQ" then 
     MainGun = "Crescendum"
+  else 
+    MainGun = ""
   end 
   MainGunAmmo = player:spellSlot(0).stacks
   crescendumfound = false
@@ -880,7 +872,7 @@ local function CheckWeapons()
         elseif buff.name == "ApheliosOffHandBuffCrescendum" then 
           AltGun = "Crescendum"
           AltGunAmmo = buff.stacks2 
-        elseif menu.d.printDebug:get() and game.time - buff.startTime < 5 and buff.endTime - game.time > 0.05 then
+        --elseif menu.d.printDebug:get() and game.time - buff.startTime < 5 and buff.endTime - game.time > 0.05 then
           --print(buff.name)
           -- if buff.name == "ApheliosSeverumQ" then 
           --   time_left = buff.endTime - game.time 
@@ -969,18 +961,25 @@ local function OnProcessSpell(spell)
     if spell.isBasicAttack and player.sar==1 and spell.target ~= nil and common.IsValidTarget(spell.target) and not IsSeverumQ and not spell.name:find("Line") then
       --orb.core.set_pause_attack(spell.windUpTime)
       if menu.c.pause:get() and (game.time + 1) >= LastOrbPause + LastOrbPauseTime then 
-        orb.core.set_pause_attack(1+network.latency)
+        orb.core.set_pause_attack(1)
         LastOrbPause = game.time 
         LastOrbPauseTime = 1 
         common.ResetOrbDelay(1+0.01)
       end
-    elseif qSpells[spell.name] and player.sar<10 and not spell.name:find("Line") then -- <= ??
+    elseif spell.isBasicAttack and spell.target ~= nil and player.sar == 1 and IsSeverumQ and spell.name:find("Line") then 
+      if menu.c.pause:get() and (game.time + 1) >= LastOrbPause + LastOrbPauseTime then 
+        orb.core.set_pause_attack(1)
+        LastOrbPause = game.time 
+        LastOrbPauseTime = 1 
+        --common.ResetOrbDelay(1+0.01)          
+      end
+    elseif qSpells[spell.name] and player.sar<10 and not spell.name:find("Line") and not spell.name ~= "ApheliosSeverumQ" then -- <= ??
       --start timer
       if menu.c.pause:get() and not IsSeverumQ and (game.time + 1 ) >= LastOrbPause + LastOrbPauseTime then 
         orb.core.set_pause_attack(1)
         LastOrbPause = game.time 
         LastOrbPauseTime = 1
-        common.ResetOrbDelay(1+0.01)
+        --common.ResetOrbDelay(1+0.01)
       end
     -- elseif spell.name:find("Line") and spell.isBasicAttack and player.sar ==1 and  spell.target ~= nil and common.IsValidTarget(spell.target) and IsSeverumQ then 
     --   if menu.c.pause:get() then 
@@ -999,7 +998,7 @@ local function OnProcessSpell(spell)
         print("ApheliosGravitumQ winduptime" .. tostring(common.round(spell.windUpTime,2)))
       end
       LastWindupPause = game.time
-      common.ResetOrbDelay(spell.windUpTime)
+      --common.ResetOrbDelay(spell.windUpTime+0.01)
     elseif spell.name == "ApheliosSeverumQ" and not IsSeverumQ then 
       SeverumT = game.time + CalculateRealCD(SeverumCD[spell_level])
       orb.core.set_pause_attack(1.75+network.latency)
@@ -1009,7 +1008,7 @@ local function OnProcessSpell(spell)
       LastWindupPause = game.time
       LastOrbPause = game.time 
       LastOrbPauseTime = 1 
-      common.ResetOrbDelay(1.75+0.01)
+      --common.ResetOrbDelay(1.75+0.01)
     elseif spell.name == "ApheliosCalibrumQ" and (game.time + spell.windUpTime) >= LastOrbPause + LastOrbPauseTime then 
       CalibrumT = game.time + CalculateRealCD(CalibrumCD[spell_level])
       orb.core.set_pause_attack(spell.windUpTime)
@@ -1019,7 +1018,7 @@ local function OnProcessSpell(spell)
       LastWindupPause = game.time
       LastOrbPause = game.time 
       LastOrbPauseTime = spell.windUpTime
-      common.ResetOrbDelay(spell.windUpTime)
+      --common.ResetOrbDelay(spell.windUpTime+0.01)
     elseif spell.name == "ApheliosInfernumQ" and (game.time + spell.windUpTime) >= LastOrbPause + LastOrbPauseTime then 
       InfernumT = game.time + CalculateRealCD(InfernumCD[spell_level])
       orb.core.set_pause_attack(spell.windUpTime)
@@ -1029,7 +1028,7 @@ local function OnProcessSpell(spell)
       if menu.d.printDebug:get() and spell.windUpTime > 0.1 and game.time - lastDebugPrint >0.05  then 
         print("ApheliosInfernumQ winduptime" .. tostring(common.round(spell.windUpTime,2)))
       end
-      common.ResetOrbDelay(spell.windUpTime)
+      --common.ResetOrbDelay(spell.windUpTime+0.01)
     elseif spell.name == "ApheliosCrescendumQ" and game.time - LastWindupPause > 0.05  and (game.time + spell.windUpTime) >= (LastOrbPause + LastOrbPauseTime) then 
       CrescendumT = game.time + CalculateRealCD(CrescendumCD[spell_level])
       orb.core.set_pause_attack(spell.windUpTime)
@@ -1039,6 +1038,7 @@ local function OnProcessSpell(spell)
       if menu.d.printDebug:get() and spell.windUpTime > 0.1 and game.time - lastDebugPrint >0.05  then 
         print("ApheliosCrescendumQ winduptime" .. tostring(common.round(spell.windUpTime,2)))
       end
+      --common.ResetOrbDelay(spell.windUpTime+0.01+network.latency)
     elseif spell.name == "ApheliosW" and game.time - LastWindupPause > 0.05 and (game.time + spell.windUpTime) >= LastOrbPause + LastOrbPauseTime then 
       orb.core.set_pause_attack(spell.windUpTime) 
       if menu.d.printDebug:get() and spell.windUpTime > 0.05 and game.time - lastDebugPrint >0.05 then 
@@ -1048,6 +1048,7 @@ local function OnProcessSpell(spell)
       LastOrbPauseTime = spell.windUpTime
       LastWindupPause = game.time
       LastSwapTime = game.time
+      --common.ResetOrbDelay(spell.windUpTime+0.01)
     elseif spell.name == "ApheliosR" and game.time - LastWindupPause > 0.2 and (game.time + spell.windUpTime) >= LastOrbPause + LastOrbPauseTime then 
       orb.core.set_pause_attack(spell.windUpTime)  
       LastWindupPause = game.time
@@ -1056,6 +1057,7 @@ local function OnProcessSpell(spell)
       if menu.d.printDebug:get() and spell.windUpTime > 0.1 and game.time - lastDebugPrint >0.05 then 
         print("ApheliosR winduptime" .. tostring(common.round(spell.windUpTime,2)))
       end
+      --common.ResetOrbDelay(spell.windUpTime+0.01)
     end
     -- if menu.d.printDebug:get() and MainGunAmmo < 3 or MainGunAmmo >= 49 then 
     --   print("Current process spell stacks .." .. tostring(MainGunAmmo))
@@ -1074,7 +1076,7 @@ local function SwapNow()
 end 
 
 local function SwapDelay(delay)
-  if player:spellSlot(1).state == 0 and game.time - LastSwapTime > delay then 
+  if player:spellSlot(1).state == 0 and game.time - LastSwapTime >= delay then 
     player:castSpell("self", 1)
     orb.core.set_server_pause()     
   end 
@@ -1147,13 +1149,14 @@ end
 local function AutoSwapCombo()
   AATarget = GetTargetAA()
   CalibrumAATarget = GetTargetAACalibrum()
+  local EnoughQMana = ((player.mana/player.maxMana)*100 > menu.f.manaManager:get())
   if player:spellSlot(1).state == 1 then return end 
     
-  if MainGunReady() and AltGunReady() then 
+  if MainGunReady() and AltGunReady() and player.mana > 55 then 
     --Out of range default 
     if AltGun == "Gravitum" and CountInTurretRangeWithGravitum() >= 3 then  
         SwapDelay(0.25)      
-    elseif not (common.IsValidTarget(AATarget) or common.IsValidTarget(CalibrumAATarget)) and common.IsValidTarget(CalibrumQTarget) then 
+    elseif not (common.IsValidTarget(AATarget) or common.IsValidTarget(CalibrumAATarget)) or common.IsValidTarget(CalibrumQTarget) then 
       if MainGun == "Calibrum" then return 
       elseif AltGun == "Calibrum" then 
         SwapDelay(2.5)
@@ -1202,47 +1205,102 @@ local function AutoSwapCombo()
   --   if menu.d.printDebug:get() then 
   --     print("Prevented swap out of Ccrescendum due to forced crescendum stacking2")
   --   end
-  elseif not MainGunReady() and AltGunReady() then -- 
+  elseif not MainGunReady() and AltGunReady() and player.mana >= 55  then -- 
     --Don't swap logic first 
     --if common.IsValidTarget(AATarget) and AltGun == "Severum" and common.GetPercentHealth() > menu.swap.severumhigh:get() and player.pos:dist(AATarget) >= 475 then 
-    if common.IsValidTarget(AATarget) and (MainGun == "Crescendum" or MainGun == "Infernum" or MainGun == "Calibrum") and AltGun == "Gravitum" and player.pos:dist(AATarget.pos) < 425+AATarget.boundingRadius and player.pos:dist(AATarget.pos) > 535+AATarget.boundingRadius and common.tablelength(common.GetEnemyHeroesInRange(1200,AATarget.pos)) < 3 and CountInTurretRangeWithGravitum() < 3  then     
+    if common.IsValidTarget(AATarget) and (MainGun == "Crescendum" or MainGun == "Infernum" or MainGun == "Calibrum") and AltGun == "Gravitum" and player.pos:dist(AATarget.pos) < 425+AATarget.boundingRadius and player.pos:dist(AATarget.pos) >= 535+AATarget.boundingRadius and common.tablelength(common.GetEnemyHeroesInRange(1200,AATarget.pos)) < 3 and CountInTurretRangeWithGravitum() < 3  then     
+      return 
     elseif not common.IsValidTarget(AATarget) and (common.IsValidTarget(CalibrumAATarget) or  common.IsValidTarget(CalibrumQTarget)) and MainGun == "Calibrum" and AltGun ~= "Crescendum" then 
+      return
     elseif player:spellSlot(1).state == 0 then  --then cast all other times
-      player:castSpell("self", 1)
-      orb.core.set_server_pause()
+      SwapDelay(0.5)
     end
+  elseif not MainGunReady() and AltGunReady() and player.mana < 55 then 
+      if MainGun == "Infernum" then return 
+      elseif AltGun == "Infernum" then 
+        SwapDelay(2.5)
+      elseif MainGun == "Crescendum" then return 
+      elseif AltGun == "Crescendum" then 
+        SwapDelay(2.5)
+      elseif MainGun == "Calibrum" then return 
+      elseif AltGun == "Calibrum" then 
+        SwapDelay(2.5)
+      elseif AltGun == "Severum" and common.GetPercentHealth() < menu.swap.severumlow:get() then 
+        SwapDelay(2.5)  
+      elseif MainGun == "Severum" and common.GetPercentHealth() >= menu.swap.severumhigh:get() then 
+        SwapDelay(2.5)
+      end 
   elseif not MainGunReady() and not AltGunReady() then -- specify no gun ready order
     if AltGun == "Calibrum" and not common.IsValidTarget(AATarget) and not common.IsValidTarget(CalibrumAATarget) and common.IsValidTarget(CalibrumQTarget) then 
-      player:castSpell("self", 1)
-      orb.core.set_server_pause()
+      SwapDelay(0.5)
     elseif AltGun == "Calibrum" and not common.IsValidTarget(AATarget) and common.IsValidTarget(CalibrumAATarget) then
-      player:castSpell("self", 1)
-      orb.core.set_server_pause()
+      SwapDelay(0.5)
+    elseif MainGun == "Calibrum" and (AltGun == "Infernum" or AltGun == "Crescendum")  and common.IsValidTarget(AATarget) and player.pos:dist(AATarget.pos) < 500 and CalibrumT - game.time > 1 and AltCD() < MainCD() then 
+      SwapDelay(0.5)
       --print("")
-    elseif AltGun == "Infernum" and common.IsValidTarget(AATarget) and common.tablelength(common.GetEnemyHeroesInRange(210, AATarget.pos)) >= 2 then 
-      player:castSpell("self", 1)
-      orb.core.set_server_pause()
-    elseif MainGun == "Severum" and common.GetPercentHealth() > menu.swap.severumhigh:get() and game.time - LastSwapTime > 1.75 and
-          AltGun ~= "Gravitum" then 
-      player:castSpell("self", 1)
-      orb.core.set_server_pause()
-    elseif MainGun == "Crescendum" and (AltGun == "Severum" or AltGun == "Infernum" or (AltGun == "Calibrum" and menu.swap.crescendumcal:get())) and common.IsValidTarget(AATarget) and CrescendumBuffs < menu.swap.stacks:get() and game.time - LastSwapTime > 3 then 
-      player:castSpell("self", 1)
-      orb.core.set_server_pause()
-      --print("CondB")
-    elseif AltGun == "Crescendum" and (MainGun == "Severum" or MainGun == "Infernum" or (MainGun == "Calibrum" and menu.swap.crescendumcal:get())) and common.IsValidTarget(AATarget) and CrescendumBuffs >= menu.swap.stacks:get() and game.time - LastSwapTime > 3 then 
-      player:castSpell("self", 1)
-      orb.core.set_server_pause()
-    elseif AltGun == "Crescendum" and common.IsValidTarget(AATarget) and CountUltHit(vec3(AATarget.pos.x, player.pos.z, AATarget.pos.y), 700)==1 and (AATarget.health/AATarget.maxHealth) < 0.70 then
-      player:castSpell("self", 1)
-      orb.core.set_server_pause()      
-    elseif MainGun == "Gravitum" and (AltGun == "Calibrum" or AltGun == "Infernum" or AltGun == "Crescendum")  and common.IsValidTarget(AATarget) and GravitumT - game.time > 0.75 then 
+    elseif MainGun == "Calibrum" and not common.IsValidTarget(AATarget) and (common.IsValidTarget(CalibrumAATarget) or common.IsValidTarget(CalibrumQTarget)) then 
+      return
+    elseif MainGun == "Crescendum" and (AltGun == "Severum" or AltGun == "Infernum" or (AltGun == "Calibrum" and menu.swap.crescendumcal:get())) and common.IsValidTarget(AATarget) and CrescendumBuffs < menu.swap.stacks:get() then 
+      SwapDelay(0.05)
+      if menu.d.printDebug:get() and game.time - lastDebugPrint > 0.05 then 
+          print("CrescSwap Cond 1 ")
+          lastDebugPrint = game.time
+      end
+    elseif AltGun == "Crescendum" and (MainGun == "Severum" or MainGun == "Infernum" or (MainGun == "Calibrum" and menu.swap.crescendumcal:get())) and common.IsValidTarget(AATarget) and CrescendumBuffs < menu.swap.stacks:get() then 
+      if menu.d.printDebug:get() and game.time - lastDebugPrint > 0.05 then 
+          print("CrescStop Cond 2 ")
+          lastDebugPrint = game.time
+      end
+      return 
+        --SwapDelay(0.5)
+    elseif AltGun == "Crescendum" and (MainGun == "Severum" or MainGun == "Infernum" or (MainGun == "Calibrum" and menu.swap.crescendumcal:get())) and common.IsValidTarget(AATarget) and CrescendumBuffs >= menu.swap.stacks:get() then 
+      SwapDelay(0.05)
+      if menu.d.printDebug:get() and game.time - lastDebugPrint > 0.05 then 
+          print("CrescSwap Cond 2 ")
+          lastDebugPrint = game.time
+      end
+    elseif MainGun == "Crescendum" and (AltGun == "Severum" or AltGun == "Infernum" or (AltGun == "Calibrum" and menu.swap.crescendumcal:get())) and common.IsValidTarget(AATarget) and CrescendumBuffs >= menu.swap.stacks:get() then 
+      if menu.d.printDebug:get() and game.time - lastDebugPrint > 0.05 then 
+          print("CrescStop Cond 2 ")
+          lastDebugPrint = game.time
+      end
+      return
+    elseif MainGun == "Crescendum" and (AltGun == "Severum" or AltGun == "Infernum" or (AltGun == "Calibrum" and menu.swap.crescendumcal:get())) and common.IsValidTarget(AATarget) then 
+      if menu.d.printDebug:get() and game.time - lastDebugPrint > 0.05 then 
+          print("CrescStop Cresc ")
+          lastDebugPrint = game.time
+      end
+      return
+    elseif MainGun == "Crescendum" and AltGun == "Gravitum" and common.IsValidTarget(AATarget) then 
+      return
+    elseif AltGun == "Infernum" and common.IsValidTarget(AATarget) and common.tablelength(common.GetEnemyHeroesInRange(225, AATarget.pos)) > 1 then 
+      SwapDelay(1)
+    elseif MainGun == "Infernum" and common.IsValidTarget(AATarget) and common.tablelength(common.GetEnemyHeroesInRange(225, AATarget.pos)) > 1 then 
+      return
+    elseif AltGun == "Infernum" and MainGun == "Severum" and common.GetPercentHealth() > menu.swap.severumlow:get() and common.IsValidTarget(AATarget) and SeverumT - game.time > 0.75 then 
       SwapDelay(0.5)
-    elseif MainGun == "Severum" and (AltGun == "Calibrum" or AltGun == "Infernum" or AltGun == "Crescendum")  and common.IsValidTarget(AATarget) and SeverumT - game.time > 0.75 then 
-      SwapDelay(0.5)
-    elseif MainGun == "Calibrum" and (AltGun == "Infernum" or AltGun == "Crescendum")  and common.IsValidTarget(AATarget) and CalibrumT - game.time > 0.75 and AltCD() < MainCD() then 
-      SwapDelay(0.5)
+    elseif MainGun == "Infernum" and AltGun == "Severum"and common.GetPercentHealth() > menu.swap.severumlow:get() and common.IsValidTarget(AATarget) and SeverumT - game.time > 0.75 then 
+      return 
+    elseif AltGun == "Infernum" and MainGun == "Gravitum"and common.IsValidTarget(AATarget)  then 
+      SwapDelay(0.25)
+    elseif MainGun == "Infernum" and AltGun == "Gravitum" and common.IsValidTarget(AATarget) then 
+      return 
+    elseif MainGun == "Severum" and common.IsValidTarget(AATarget) and common.GetPercentHealth() > menu.swap.severumhigh:get() and AltCD() < MainCD() then 
+      SwapDelay(1.25)
+    elseif (MainGun == "Calibrum" or MainGun == "Infernum" or MainGun == "Crescendum" or MainGun == "Gravitum") and AltGun == "Severum" and common.IsValidTarget(AATarget) and MainCD() < AltCD() and common.GetPercentHealth() > menu.swap.severumhigh:get() then 
+      return
+    -- elseif MainGun == "Severum" and (AltGun == "Calibrum" or AltGun == "Infernum" or AltGun == "Crescendum") and not (common.GetPercentHealth() < menu.swap.severumlow:get()) and common.IsValidTarget(AATarget) and SeverumT - game.time > 1 and AltCD() < MainCD() then 
+    --   SwapDelay(1.25)
+    elseif AltGun == "Gravitum" and (MainGun == "Calibrum" or MainGun == "Infernum" or MainGun == "Crescendum")  and common.IsValidTarget(AATarget) and GravitumT - game.time > 0.75 and CountGravitumBuffsNow() < 3 then 
+      return 
     elseif (MainGun == "Calibrum" or MainGun == "Infernum" or MainGun == "Crescendum" or MainGun == "Severum") and AltGun == "Gravitum" and common.IsValidTarget(AATarget)  and GravitumT - game.time > 1 and MainCD() < AltCD() then 
+      return
+    elseif MainGun == "Gravitum" and MainCD() < AltCD() and GravitumT - game.time < 0.5 and CountGravitumBuffs() >= 2 then 
+      return 
+    elseif AltGun == "Gravitum" and AltCD() < MainCD() and GravitumT - game.time < 0.5 and CountGravitumBuffs() >= 3 then 
+      SwapDelay(0.5)
+     -- elseif MainGun == "Gravitum" and (AltGun == "Calibrum" or AltGun == "Infernum" or AltGun == "Crescendum")  and common.IsValidTarget(AATarget) and GravitumT - game.time > 0.75 and CountGravitumBuffsNow() < 3 then 
+    --   SwapDelay(1.25)
     end 
   end
 end 
@@ -1355,25 +1413,25 @@ local function FarmUse(mob) --Q state usage for farm mode
   end
 
   --Let Hanbot Orb takeover for 3 targeted spells 
-  if MainGun == "Infernum" and MainGunReady then 
+  if MainGun == "Infernum" and MainGunReady() then 
     seg, obj = orb.farm.skill_clear_linear(spellInfernumQ)
     if seg and player.pos:dist(vec3(seg.endPos.x, 0, seg.endPos.y)) < spellInfernumQ.range then 
       player:castSpell("pos", 0, vec3(seg.endPos.x, player.pos.y, seg.endPos.y))
       orb.core.set_server_pause()
     end   
-  elseif MainGun == "Calibrum" and MainGunReady then  
+  elseif MainGun == "Calibrum" and MainGunReady() then  
     seg, obj = orb.farm.skill_clear_linear(spellCalibrumQ)
     if seg and player.pos:dist(vec3(seg.endPos.x, 0, seg.endPos.y)) < spellCalibrumQ.range then 
       player:castSpell("pos", 0 , vec3(seg.endPos.x, player.pos.y, seg.endPos.y))
       orb.core.set_server_pause()
     end   
-  elseif MainGun == "Crescendum" and MainGunReady then 
+  elseif MainGun == "Crescendum" and MainGunReady() then 
     seg, obj = orb.farm.skill_clear_linear(spellCrescendumQFarm)
     if seg and player.pos:dist(vec3(seg.endPos.x, 0, seg.endPos.y)) < spellCrescendumQFarm.range then 
       player:castSpell("pos", 0 , vec3(seg.endPos.x, player.pos.y, seg.endPos.y))
       orb.core.set_server_pause()
     end   
-  elseif MainGun == "Severum" and MainGunReady then 
+  elseif MainGun == "Severum" and MainGunReady() then 
     seg, obj = orb.farm.skill_clear_target(spellSeverumQ)
     if seg and obj and obj.pos and player.pos:dist(vec3(seg.endPos.x, 0, seg.endPos.y)) < spellSeverumQ.range then 
       player:castSpell("obj", 0 , obj)
@@ -1456,23 +1514,19 @@ end
 local function RLogic(obj, segment) 
   if menu.c.slowPred:get() then 
     if menu.c.forceInfernumR:get() and player:spellSlot(1).state == 0 and AltGun == "Infernum" then 
-      player:castSpell("self",1)
-      orb.core.set_server_pause()
+      SwapDelay(0.5)
     elseif menu.c.forceInfernumR:get() and MainGun == "Infernum" then 
       player:castSpell("pos", 3, vec3(segment.endPos.x, 0, segment.endPos.y))
       orb.core.set_server_pause()
     elseif menu.c.forceGravitumR:get() and player:spellSlot(1).state == 0  and MainGun ~= "Infernum" and AltGun ~= "Infernum" and AltGun == "Gravitum" then 
-      player:castSpell("self",1)
-      orb.core.set_server_pause()
+      SwapDelay(0.5)
     elseif menu.c.forceGravitumR:get() and MainGun ~= "Infernum" and AltGun ~= "Infernum" and MainGun == "Gravitum" then 
       player:castSpell("pos", 3, vec3(segment.endPos.x, 0, segment.endPos.y))
       orb.core.set_server_pause()
     elseif menu.c.forceSeverumR:get() and common.GetPercentHealth() < 0.18 and player:spellSlot(1).state == 0 and MainGun ~= "Infernum" and AltGun ~= "Infernum" and  MainGun ~= "Gravitum" and AltGun ~= "Gravitum" and AltGun == "Severum" then 
-      player:castSpell("self",1)
-      orb.core.set_server_pause()
+      SwapDelay(1)
     elseif menu.c.forceSeverumR:get() and common.GetPercentHealth() > 0.45 and MainGun == "Severum" and player:spellSlot(1).state == 0 then 
-      player:castSpell("self",1)
-      orb.core.set_server_pause()
+      SwapDelay(1)
     else
       player:castSpell("pos", 3, vec3(segment.endPos.x, 0, segment.endPos.y))
       orb.core.set_server_pause()
@@ -1668,6 +1722,7 @@ local function AutoKS(target)
     elseif target and menu.ks.useRsmart:get() and common.IsValidTarget(target) and AltGun == "Infernum" and CalcRDamage(target, "Infernum") > target.health and player:spellSlot(1).state == 0 then
       if SlowPredR(target, segment) and common.IsValidTarget(target) and menu.ks.useRsmart:get() and CountUltHit(seg_vec3, 250) >= 2 then 
         player:castSpell("self", 1)
+        orb.core.set_server_pause()
         if menu.d.printDebug:get() and game.time - lastDebugPrint > 0.25 then 
           print("R ks swap is active smart3")
         end
@@ -1776,8 +1831,8 @@ local function OnCreateMinion(obj)
       print("TurretFounda!")
       lastDebugPrint = game.time 
     end 
-    orb.core.reset()
-    common.ResetOrb()
+    --orb.core.reset()
+    --common.ResetOrb()
     common.ResetAllOrbDelay(network.latency+0.01)
   end
 end
@@ -1796,7 +1851,7 @@ end
 
 local function OnTick()
 
-  if common.CheckBuff(player, "aphelioslockfacing") then 
+  if common.CheckBuff(player, "aphelioslockfacing") and IsSeverumQ then 
       -- if menu.d.printDebug:get() then 
       --   print("returning aphelios lock2")
       -- end
@@ -1805,26 +1860,29 @@ local function OnTick()
     --if cur_end_time and cur_end_time - game.time > 0 and IsSeverumQ then
     --if cur_end_time and cur_end_time - game.time > 0 and (IsSeverumQ or MainGun == "Infernum" or player.sar < 2) then
     if cur_end_time and cur_end_time - game.time > 0 then
-      --orb.core.set_pause(cur_end_time - game.time)
-      if game.time - LastMoveOrder > 0.02 then 
         --if player.pos:dist(mousePos) > 250 then 
           --common.MoveToNormalizeMouse()
         --else
-          player:move(mousePos) 
+          --orb.core.set_pause(cur_end_time - game.time)
+      player:move(mousePos) 
         --end
-        LastMoveOrder = game.time 
-      end
+      LastMoveOrder = game.time 
       LastFacingTick = game.time 
       --common.ResetOrbDelay(cur_end_time - game.time)
       -- if menu.d.printDebug:get() then 
       --   print("returning aphelios lock3" .. tostring(common.round(cur_end_time - game.time ,2)))
       --   print("Game time " .. tostring(common.round(game.time)) .. " lockend " ..  tostring(common.round(cur_end_time)))
       -- end
+    --elseif cur_end_time and cur_end_time - game.time > 0 then 
+      --orb.core.set_pause_attack(cur_end_time - game.time)
     else 
-      if menu.d.printDebug:get() then 
+      if menu.d.printDebug:get() and game.time - LastFacingTick < 0.05 then 
         print("Resetting ORB")
       end
-      common.ResetOrb()
+      if game.time - LastFacingTick < 0.01 then 
+        --orb.core.reset()
+        common.ResetOrb()
+      end
 
     end
   else  
@@ -2026,13 +2084,20 @@ local function OnDraw()
       graphics.draw_text_2D('Last orb pause '.. tostring(common.round(game.time - LastOrbPause, 2))  .. ' windup pause ' .. tostring(common.round(game.time -LastWindupPause,2)), 18, player_world_pos.x+55, player_world_pos.y-55, colorCD)
     end
     
+    -- if common.CheckBuff(player, "aphelioslockfacing") then 
+    --   graphics.draw_text_2D('Lockfacing true' .. ' SevQ ' .. tostring(IsSeverumQ) .. ' Canattack ' .. tostring(orb.core.can_attack()) .. ' Paused ' .. tostring(orb.core.is_paused()), 28, player_world_pos.x-20, player_world_pos.y-155, coloractive)
+    -- elseif common.CheckBuff(player, "aphelioslockfacing") and pred.trace.newpath(player, 0.1, 1.5) then 
+    --   graphics.draw_text_2D('Lockfacing true' .. ' SevQ ' .. tostring(IsSeverumQ) .. ' Canattack ' .. tostring(orb.core.can_attack()) .. ' Paused ' .. tostring(orb.core.is_paused()) .. ' newpath ' .. tostring(pred.trace.newpath(player, 0.1, 1.5)), 28, player_world_pos.x-20, player_world_pos.y-155, coloractive)
+    -- elseif pred.trace.newpath(player, 0.5, 1.5) then 
+    --   graphics.draw_text_2D(' newpath ' .. tostring(pred.trace.newpath(player, 0.1, 1.5)), 28, player_world_pos.x-20, player_world_pos.y-155, colorCD)
+    -- end 
+
     if common.CheckBuff(player, "aphelioslockfacing") then 
       graphics.draw_text_2D('Lockfacing true' .. ' SevQ ' .. tostring(IsSeverumQ) .. ' Canattack ' .. tostring(orb.core.can_attack()) .. ' Paused ' .. tostring(orb.core.is_paused()), 28, player_world_pos.x-20, player_world_pos.y-155, coloractive)
-    elseif common.CheckBuff(player, "aphelioslockfacing") and pred.trace.newpath(player, 0.1, 1.5) then 
-      graphics.draw_text_2D('Lockfacing true' .. ' SevQ ' .. tostring(IsSeverumQ) .. ' Canattack ' .. tostring(orb.core.can_attack()) .. ' Paused ' .. tostring(orb.core.is_paused()) .. ' newpath ' .. tostring(pred.trace.newpath(player, 0.1, 1.5)), 28, player_world_pos.x-20, player_world_pos.y-155, coloractive)
-    elseif pred.trace.newpath(player, 0.5, 1.5) then 
-      graphics.draw_text_2D(' newpath ' .. tostring(pred.trace.newpath(player, 0.1, 1.5)), 28, player_world_pos.x-20, player_world_pos.y-155, colorCD)
+    else  
+      graphics.draw_text_2D('Lockfacing false' .. ' SevQ ' .. tostring(IsSeverumQ) .. ' Canattack ' .. tostring(orb.core.can_attack()) .. ' Paused ' .. tostring(orb.core.is_paused()), 28, player_world_pos.x-20, player_world_pos.y-155, colorCD)
     end 
+
     if common.IsValidTarget(AATarget) then
       if MainGun == "Infernum" then 
         Rdam = CalcRDamage(AATarget, "Infernum")

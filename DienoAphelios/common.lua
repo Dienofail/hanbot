@@ -83,7 +83,7 @@ end
 function common.ResetAllOrbDelay(delay)
   if delay and delay >= 0 then 
     --common.DelayAction(function() orb.core.reset() orb.core.set_pause_move(0) orb.core.set_pause_attack(0) end, delay)
-    common.DelayAction(function() orb.core.reset() orb.core.set_pause(0) orb.core.set_pause_move(0) orb.core.set_pause_attack(0) end, delay)
+    common.DelayAction(function() orb.core.set_pause(0) orb.core.set_pause_move(0) orb.core.set_pause_attack(0) end, delay)
   end 
 end 
 
@@ -161,7 +161,7 @@ function common.CheckBuffWithTimeEndOwner(obj, buffname)
 
       if buff and buff.valid and buff.name == buffname and (buff.stacks > 0 or buff.stacks2 > 0) and buff.source.ptr == player.ptr then
         if game.time <= buff.endTime then
-          return true, buff.endTime
+          return true
         end 
       end
     end
