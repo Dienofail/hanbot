@@ -83,7 +83,7 @@ end
 function common.ResetAllOrbDelay(delay)
   if delay and delay >= 0 then 
     --common.DelayAction(function() orb.core.reset() orb.core.set_pause_move(0) orb.core.set_pause_attack(0) end, delay)
-    common.DelayAction(function() orb.core.set_pause(0) orb.core.set_pause_move(0) orb.core.set_pause_attack(0) end, delay)
+    common.DelayAction(function() orb.core.reset() orb.core.set_pause(0) orb.core.set_pause_move(0) orb.core.set_pause_attack(0) end, delay)
   end 
 end 
 
@@ -104,8 +104,28 @@ function common.CheckBuffType(obj, bufftype)
       end
     end
   end
+end 
+
+function common.ReverseTable(arr)
+  local i, j = 1, #arr
+
+  while i < j do
+    arr[i], arr[j] = arr[j], arr[i]
+
+    i = i + 1
+    j = j - 1
+  end
 end
 
+function common.tableslice(tbl, first, last, step)
+  local sliced = {}
+
+  for i = first or 1, last or #tbl, step or 1 do
+    sliced[#sliced+1] = tbl[i]
+  end
+
+  return sliced
+end
 function common.CombatActive()
   return orb.menu.combat.key:get()
 end
