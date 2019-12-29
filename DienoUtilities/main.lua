@@ -4,8 +4,12 @@ local pred = module.internal("pred");
 local ts = module.internal('TS');
 local common = module.load("dutilities", "common");
 local ObjMinion_Type = objManager.minions
-local version = "0.1_rc2"
-
+local version = "0.1_rc3"
+local clip = module.internal('clipper')
+local polygon = clip.polygon
+local polygons = clip.polygons
+local clipper = clip.clipper
+local clipper_enum = clip.enum
 --Full changelogs are on my discord. Visit hanbot forums, my github, or pm dienofail#1100 on discord if you need an invite.
 
 local lastDebugPrint = 0 
@@ -20,13 +24,15 @@ local lastGhost = {}
 local lastPrintTime = 0
 local lastCleanse = {}
 local lastExhaust = {}
-local Choices = {'Top', 'Jungle', 'Mid' , 'ADC', 'Sup'}
+local lastCampSeen = {}
+local Choices = {'top', 'jg', 'mid' , 'adc', 'sup'}
 local menu = menu("dutilities", "Dieno Utilities")
 menu:menu("map", "Minimap settings")
 menu.map:header("mapgeneral", "Minimap settings")
 menu.map:boolean("maptoggle", "Minimap toggle", true)
 menu.map:boolean("drawbox", "Draw box", true)
 menu.map:boolean("drawneutral", "Draw neutral", true)
+menu.map:boolean('drawscuttle', "Draw scuttle", false)
 menu.map:boolean("drawlane", "Draw lanes", true)
 menu.map:boolean("followplayer", "Minimap follows player", true)
 menu.map:slider("offsetx", "^X offset relative to player", 100,-750,750,10)
@@ -46,7 +52,7 @@ menu.chat:boolean("flashteleport","Print only flash/teleport", false)
 menu.chat:boolean("round", "Round to nearest 5s", true)
 menu.chat:boolean("printroles", "Try to print roles", false)
 for idx, obj in ipairs(common.GetEnemyHeroes()) do 
-    menu.chat:dropdown('role ' .. obj.charName, obj.charName .. " role" ,1, {'Top', 'Jungle', 'Mid' , 'ADC', 'Sup'})
+    menu.chat:dropdown('role ' .. obj.charName, obj.charName .. " role" ,1, {'top', 'jg', 'mid' , 'adc', 'sup'})
 end
 
 for idx, obj in ipairs(common.GetEnemyHeroes()) do 
@@ -58,6 +64,10 @@ menu.misc:header("miscd", "Misc. settings")
 if player.charName == "Twitch" then
   menu.misc:keybind('twitch', "Twitch stealth and back", 'T', '')
 end
+menu.misc:header("debugd", "Debug settings")
+menu.misc:boolean("debug", "Debug", false)
+menu.misc:keybind("debugkey", "Debug key", nil, nil)
+
 
 ts.load_to_menu(); 
 local excluded_minions = {
@@ -113,7 +123,46 @@ function SecondsToClock(seconds)
   end
 end
 
+function SecondsToClockColon(seconds)
+  local seconds = tonumber(seconds)
+
+  if menu.chat.round:get() then 
+      seconds = common.round(seconds/5)*5
+  end
+
+  if seconds <= 0 then
+    return "00:00";
+  else
+    if not menu.chat.prostyle:get() then 
+        hours = string.format("%02.f", math.floor(seconds/3600));
+        mins = string.format("%02.f", math.floor(seconds/60 - (hours*60)));
+        secs = string.format("%02.f", math.floor(seconds - hours*3600 - mins *60));
+        return mins..":"..secs
+    else
+        hours = string.format("%02.f", math.floor(seconds/3600));
+        if math.floor(seconds/60 - (hours*60)) < 10 then 
+            mins = string.format("%01.f", math.floor(seconds/60 - (hours*60)));
+        else
+            mins = string.format("%02.f", math.floor(seconds/60 - (hours*60)));
+        end
+        secs = string.format("%02.f", math.floor(seconds - hours*3600 - mins *60));
+        return mins..":"..secs
+    end
+  end
+end
+
+
 local function OnCreateMinion(obj)  
+  --SRU_OrderMinionRanged
+  --SRU_OrderMinionSiege 
+  --SRU_OrderMinionMelee
+  --SRU_OrderMinionSuper
+  --SRU_ChaosMinionRanged
+  --SRU_Dragon_Earth
+  --SRU_Dragon_Elder
+  --SRU_Dragon_Fire
+  --SRU_Dragon_Water
+  --SRU_Blue
 
 end
 
@@ -146,8 +195,14 @@ end
 
 
 local function OnProcessSpell(spell)
-  if spell.owner.ptr == player.ptr and spell.owner.team == TEAM_ALLY then 
-      --print(tostring(spell.name) .. " " .. tostring(spell.charName) ..  ' ' .. tostring(spell.slot))
+  if spell.owner.ptr == player.ptr and spell.owner.team == TEAM_ALLY and menu.misc.debug:get() then 
+      print(tostring(spell.name) .. " " .. tostring(spell.charName) ..  ' ' .. tostring(spell.slot))
+  end
+
+  if spell.owner.team == TEAM_ALLY then
+      if spell.name:find("Teleport") and menu.misc.debug:get() then 
+      print('tele ' .. tostring(spell.name) .. " " .. tostring(spell.charName))
+      end
   end
   target_team = TEAM_ENEMY
   if spell.owner and spell.name == "SummonerFlash" and spell.owner.team == target_team then 
@@ -155,11 +210,11 @@ local function OnProcessSpell(spell)
     --print("Flash detected")
   elseif spell.name and spell.name == "SummonerHeal" and spell.owner.team == target_team then 
     lastHeal[spell.owner.ptr] = game.time
-  elseif spell.name and  spell.name == "SummonerTeleport" and spell.owner.team == target_team then 
+  elseif spell.name and (spell.name == "TeleportChannelBar4500" or spell.name == "SummonerTeleport") and spell.owner.team == target_team then 
     lastTeleport[spell.owner.ptr] = game.time
   elseif spell.name and spell.name == "SummonerBarrier" and spell.owner.team == target_team then 
     lastBarrier[spell.owner.ptr] = game.time
-  elseif spell.name and spell.name == "SummonerIgnite" and spell.owner.team == target_team then
+  elseif spell.name and spell.name == "SummonerDot" and spell.owner.team == target_team then
     lastIgnite[spell.owner.ptr] = game.time
   elseif spell.name and spell.name == "SummonerBoost" and spell.owner.team == target_team then 
     lastCleanse[spell.owner.ptr] = game.time
@@ -173,38 +228,38 @@ end
 local function ConstructString(enemy_ptr)
     str = ""
     if lastFlash[enemy_ptr] and game.time - lastFlash[enemy_ptr] < 300 then 
-        str = str .. " Flash " .. SecondsToClock(lastFlash[enemy_ptr]+300)
+        str = str .. " F " .. SecondsToClock(lastFlash[enemy_ptr]+300)
         --print("Flash str " .. str)
     end
 
     if lastTeleport[enemy_ptr] and game.time - lastTeleport[enemy_ptr] < 360 then 
-        str = str .. " Teleport " .. tostring(SecondsToClock(lastTeleport[enemy_ptr]+360))
+        str = str .. " TP " .. tostring(SecondsToClock(lastTeleport[enemy_ptr]+360))
     end
 
     if not menu.chat.flashteleport:get() then
       if lastHeal[enemy_ptr] and game.time - lastHeal[enemy_ptr] < 240 then 
-          str = str .. " Heal " .. tostring(SecondsToClock(lastHeal[enemy_ptr]+240))
+          str = str .. " heal " .. tostring(SecondsToClock(lastHeal[enemy_ptr]+240))
           --print("Heal str " .. str)
       end
 
       if lastBarrier[enemy_ptr] and game.time - lastBarrier[enemy_ptr] < 180 then 
-          str = str .. " Barrier " .. tostring(SecondsToClock( lastBarrier[enemy_ptr]+180))
+          str = str .. " barrier " .. tostring(SecondsToClock( lastBarrier[enemy_ptr]+180))
       end
 
       if lastCleanse[enemy_ptr] and game.time - lastCleanse[enemy_ptr] < 210 then 
-          str = str .. " Cleanse " .. tostring(SecondsToClock(lastCleanse[enemy_ptr]+210))
+          str = str .. " cleanse " .. tostring(SecondsToClock(lastCleanse[enemy_ptr]+210))
       end
 
       if lastIgnite[enemy_ptr] and game.time - lastIgnite[enemy_ptr] < 180 then 
-          str = str .. " Ignite " .. tostring(SecondsToClock(lastIgnite[enemy_ptr]+180))
+          str = str .. " ignite " .. tostring(SecondsToClock(lastIgnite[enemy_ptr]+180))
       end
 
       if lastExhaust[enemy_ptr] and game.time - lastExhaust[enemy_ptr] < 210 then 
-          str = str .. " Exhaust " .. tostring(SecondsToClock(lastExhaust[enemy_ptr]+210))
+          str = str .. " exh " .. tostring(SecondsToClock(lastExhaust[enemy_ptr]+210))
       end
       
       if lastGhost[enemy_ptr] and game.time - lastGhost[enemy_ptr] < 180 then 
-          str = str .. " Ghost " .. tostring(SecondsToClock(lastGhost[enemy_ptr]+180))
+          str = str .. " ghost " .. tostring(SecondsToClock(lastGhost[enemy_ptr]+180))
       end
     end
 
@@ -286,7 +341,6 @@ local function vec2minimap(invec,map_corners, map_size)
   return vec2(map_corners.BL.x +x_ratio*map_size, map_corners.BL.y - y_ratio*map_size)
 end
 
-
 local function OnDraw()
   alpha = 255 
   local coloractive = graphics.argb(alpha, 25, 185,50)
@@ -297,6 +351,7 @@ local function OnDraw()
   local colorred =  graphics.argb(alpha, 204,0,0)
   local colordragon = graphics.argb(alpha,204, 51, 0)
   local colorfriendly = graphics.argb(alpha,0, 153, 255)
+  local colorteal = graphics.argb(alpha,0,204,255)
   local colorlanes =  graphics.argb(common.round(alpha/3), 255, 255, 255)
   local colormissing = graphics.argb(alpha, 153,153,102)
   local player_world_pos = graphics.world_to_screen(player.pos)
@@ -328,11 +383,25 @@ local function OnDraw()
   local botb = vec2(11235, 1889)
   local botc = vec2(12917, 3297)
   local botd = vec2(13118, 9973)
-  if mousePos then 
-    --graphics.draw_text_2D('X ' .. tostring(mousePos.x) .. " " .. tostring(mousePos.y) .. " "..  tostring(mousePos.z), 14, cursor_world_pos.x-22, cursor_world_pos.y+65, coloractive)
+
+  local validFunc = function(obj)
+    return obj and obj.type == TYPE_MINION and obj.team == team and not obj.isDead and obj.health and obj.health > 0 and
+      obj.isVisible
   end
 
-
+  if mousePos and menu.misc.debug:get() then 
+    --graphics.draw_text_2D('X ' .. tostring(mousePos.x) .. " " .. tostring(mousePos.y) .. " "..  tostring(mousePos.z), 14, cursor_world_pos.x-22, cursor_world_pos.y+65, coloractive)
+    graphics.draw_circle_2D(cursor_world_pos.x, cursor_world_pos.y, 250, 2, colorwhite, 20)
+    --num, tab = common.CountObjectsNearPos(mousePos, 250, common.units.enemyMinions, validFunc)
+      
+    for i=0, objManager.maxObjects-1 do
+        local obj = objManager.get(i)
+        if obj and obj.pos and mousePos:dist(obj.pos) < 250 then
+            graphics.draw_text_2D(tostring(obj.charName), 14,graphics.world_to_screen(obj.pos).x-20, graphics.world_to_screen(obj.pos).y+65,coloractive)
+            graphics.draw_text_2D(tostring(obj.name), 14,graphics.world_to_screen(obj.pos).x-20, graphics.world_to_screen(obj.pos).y+95,coloractive)
+        end
+    end
+  end
 
   if common.IsValidTarget(player) then
     if menu.map.maptoggle:get() then 
@@ -363,14 +432,14 @@ local function OnDraw()
         graphics.draw_line_strip_2D(v, 2, colorlanes, 5)
       end
 
-      if menu.map.drawneutral:get() then 
-        graphics.draw_circle_2D(vec2minimap(baron,map_corners, map_size).x, vec2minimap(baron,map_corners, map_size).y, 4, 2, colorbaron, 2)
-        graphics.draw_circle_2D(vec2minimap(dragon,map_corners, map_size).x, vec2minimap(dragon,map_corners, map_size).y, 4, 2, colordragon, 2)
-        graphics.draw_circle_2D(vec2minimap(blue_blue,map_corners, map_size).x, vec2minimap(blue_blue,map_corners, map_size).y, 4, 2, colorblue, 2)
-        graphics.draw_circle_2D(vec2minimap(red_blue,map_corners, map_size).x, vec2minimap(red_blue,map_corners, map_size).y, 4, 2, colorblue, 2)
-        graphics.draw_circle_2D(vec2minimap(red_red,map_corners, map_size).x, vec2minimap(red_red,map_corners, map_size).y, 4, 2, colorred, 2)
-        graphics.draw_circle_2D(vec2minimap(blue_red,map_corners, map_size).x, vec2minimap(blue_red,map_corners, map_size).y, 4, 2, colorred, 2)
-      end 
+      -- if menu.map.drawneutral:get() then 
+      --   graphics.draw_circle_2D(vec2minimap(baron,map_corners, map_size).x, vec2minimap(baron,map_corners, map_size).y, 4, 2, colorbaron, 2)
+      --   graphics.draw_circle_2D(vec2minimap(dragon,map_corners, map_size).x, vec2minimap(dragon,map_corners, map_size).y, 4, 2, colordragon, 2)
+      --   graphics.draw_circle_2D(vec2minimap(blue_blue,map_corners, map_size).x, vec2minimap(blue_blue,map_corners, map_size).y, 4, 2, colorblue, 2)
+      --   graphics.draw_circle_2D(vec2minimap(red_blue,map_corners, map_size).x, vec2minimap(red_blue,map_corners, map_size).y, 4, 2, colorblue, 2)
+      --   graphics.draw_circle_2D(vec2minimap(red_red,map_corners, map_size).x, vec2minimap(red_red,map_corners, map_size).y, 4, 2, colorred, 2)
+      --   graphics.draw_circle_2D(vec2minimap(blue_red,map_corners, map_size).x, vec2minimap(blue_red,map_corners, map_size).y, 4, 2, colorred, 2)
+      -- end 
 
       if menu.map.drawlane:get() then 
         graphics.draw_line_2D(vec2minimap(topa,map_corners, map_size).x, vec2minimap(topa,map_corners, map_size).y, vec2minimap(topb,map_corners, map_size).x, vec2minimap(topb,map_corners, map_size).y, 3, colorlanes)
@@ -443,7 +512,77 @@ local function OnDraw()
           graphics.draw_text_2D(tostring(manaPerc),10, objvec.x-15,objvec.y+22, colorfriendly)
         end
       end
+    if menu.map.drawneutral:get() then 
+      for i=0, objManager.maxObjects-1 do
+          local obj = objManager.get(i)
+          if obj and obj.pos and obj.type == TYPE_CAMP then
+              --graphics.draw_text_2D(tostring(obj.charName), 14,graphics.world_to_screen(obj.pos).x-20, graphics.world_to_screen(obj.pos).y+65,coloractive)
+              if obj.active and (obj.name == "monsterCamp_10" or obj.name == "monsterCamp_4") then 
+                  graphics.draw_circle_2D(vec2minimap(obj.pos2D,map_corners, map_size).x, vec2minimap(obj.pos2D,map_corners, map_size).y, 4, 3, colorred, 2)
+              elseif obj.active and (obj.name == "monsterCamp_1" or obj.name == "monsterCamp_7") then 
+                  graphics.draw_circle_2D(vec2minimap(obj.pos2D,map_corners, map_size).x, vec2minimap(obj.pos2D,map_corners, map_size).y, 4, 3, colorblue, 2)
+              elseif obj.active and (obj.name == "monsterCamp_6") then 
+                  graphics.draw_circle_2D(vec2minimap(obj.pos2D,map_corners, map_size).x, vec2minimap(obj.pos2D,map_corners, map_size).y, 4, 3, colordragon, 2)                   
+              elseif obj.active and (obj.name == "monsterCamp_17") and game.time < 1200 then 
+                  graphics.draw_circle_2D(vec2minimap(obj.pos2D,map_corners, map_size).x, vec2minimap(obj.pos2D,map_corners, map_size).y, 4, 3, colorbaron, 2)
+              elseif obj.active and (obj.name == "monsterCamp_12") and game.time >= 1200 then 
+                  graphics.draw_circle_2D(vec2minimap(obj.pos2D,map_corners, map_size).x, vec2minimap(obj.pos2D,map_corners, map_size).y, 4, 3, colorbaron, 2)                
+              elseif obj.active and (obj.name == "monsterCamp_16" or obj.name == "monsterCamp_15") and menu.mini  then 
+                  graphics.draw_circle_2D(vec2minimap(obj.pos2D,map_corners, map_size).x, vec2minimap(obj.pos2D,map_corners, map_size).y, 4, 3, colorteal, 2)                   
+              elseif obj.active and (obj.name == "monsterCamp_13" or obj.name == "monsterCamp_2" or obj.name == "monsterCamp_3" or obj.name == "monsterCamp_5" or
+                    obj.name == "monsterCamp_14" or obj.name == "monsterCamp_8" or obj.name == "monsterCamp_9"or obj.name == "monsterCamp_11") then 
+                 graphics.draw_circle_2D(vec2minimap(obj.pos2D,map_corners, map_size).x, vec2minimap(obj.pos2D,map_corners, map_size).y, 4, 3, colorlanes, 2)                   
+              end 
 
+              if obj.active then 
+                  lastCampSeen[obj.name] = game.time 
+              end 
+
+              --17 = herald, 12 = baron
+
+
+              if (obj.name == "monsterCamp_10" or obj.name == "monsterCamp_4" or obj.name == "monsterCamp_1" or obj.name == "monsterCamp_7") and lastCampSeen[obj.name] then 
+                  time_left = SecondsToClockColon(lastCampSeen[obj.name] + 300 - game.time)
+              elseif (obj.name == "monsterCamp_6") and lastCampSeen[obj.name] then 
+                  time_left = SecondsToClockColon(lastCampSeen[obj.name] + 300 - game.time)
+              elseif (obj.name == "monsterCamp_12") and lastCampSeen[obj.name] then 
+                  time_left = SecondsToClockColon(lastCampSeen[obj.name] + 360 - game.time)
+              elseif (obj.name == "monsterCamp_17") and lastCampSeen[obj.name] then 
+                if (lastCampSeen[obj.name] + 360) < 1170 then 
+                  time_left = SecondsToClockColon(lastCampSeen[obj.name] + 360 - game.time)
+                else
+                  time_left = SecondsToClockColon(1200 - game.time)
+                end
+              elseif (obj.name == "monsterCamp_16" or obj.name == "monsterCamp_15") and lastCampSeen[obj.name] and menu.map.drawscuttle:get() then 
+                  time_left = SecondsToClockColon(lastCampSeen[obj.name] + 240 - game.time)
+              elseif (obj.name == "monsterCamp_13" or obj.name == "monsterCamp_2" or obj.name == "monsterCamp_3" or obj.name == "monsterCamp_5" or
+                    obj.name == "monsterCamp_14" or obj.name == "monsterCamp_8" or obj.name == "monsterCamp_9"or obj.name == "monsterCamp_11") and lastCampSeen[obj.name] then  
+                  time_left =  SecondsToClockColon(lastCampSeen[obj.name] + 120 - game.time)
+              elseif obj.spawnTime - game.time >= 0 then 
+                  time_left = SecondsToClockColon(obj.spawnTime - game.time)
+              end
+
+
+              if not obj.active and (obj.name == "monsterCamp_10" or obj.name == "monsterCamp_4") then --red
+                  graphics.draw_text_2D(time_left, 14, vec2minimap(obj.pos2D,map_corners, map_size).x, vec2minimap(obj.pos2D,map_corners, map_size).y, colorred)
+              elseif not obj.active and (obj.name == "monsterCamp_1" or obj.name == "monsterCamp_7") then --blue
+                  graphics.draw_text_2D(time_left, 14, vec2minimap(obj.pos2D,map_corners, map_size).x, vec2minimap(obj.pos2D,map_corners, map_size).y, colorblue)                
+              elseif not obj.active and (obj.name == "monsterCamp_6") then --dragon
+                  graphics.draw_text_2D(time_left, 14, vec2minimap(obj.pos2D,map_corners, map_size).x, vec2minimap(obj.pos2D,map_corners, map_size).y, colordragon)                
+              elseif not obj.active and (obj.name == "monsterCamp_12") and game.time >= 1200  then --baron
+                  graphics.draw_text_2D(time_left, 14, vec2minimap(obj.pos2D,map_corners, map_size).x, vec2minimap(obj.pos2D,map_corners, map_size).y, colorbaron)
+              elseif not obj.active and (obj.name == "monsterCamp_17") and game.time < 1200 then --baron
+                  graphics.draw_text_2D(time_left, 14, vec2minimap(obj.pos2D,map_corners, map_size).x, vec2minimap(obj.pos2D,map_corners, map_size).y, colorbaron)                
+              elseif not obj.active and (obj.name == "monsterCamp_16" or obj.name == "monsterCamp_15") and menu.map.drawscuttle:get()  then --scuttle
+                  graphics.draw_text_2D(time_left, 13, vec2minimap(obj.pos2D,map_corners, map_size).x, vec2minimap(obj.pos2D,map_corners, map_size).y, colorteal)                
+              elseif not obj.active and (obj.name == "monsterCamp_13" or obj.name == "monsterCamp_2" or obj.name == "monsterCamp_3" or obj.name == "monsterCamp_5" or
+                     obj.name == "monsterCamp_14" or obj.name == "monsterCamp_8" or obj.name == "monsterCamp_9"or obj.name == "monsterCamp_11") then 
+                  graphics.draw_text_2D(time_left, 13, vec2minimap(obj.pos2D,map_corners, map_size).x, vec2minimap(obj.pos2D,map_corners, map_size).y, colorlanes)                
+              end 
+
+          end
+      end
+    end
 
       --graphics.draw_line_2D(map_corners.BL.x,map_corners.BL.y,map_corners.TL.x, map_corners.TL.y, 4, 0xFFFFFFFF )
     end

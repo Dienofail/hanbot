@@ -406,6 +406,22 @@ function common.Normalize(direction)
 end
 
 
+function common.CalcPlayerTravelDistance(pos)
+  if pos then 
+    local travel_distance = 0 
+    local p,n = player.path:calcPos(pos)
+    for i=0,n-1 do 
+      if i == 0 then 
+          travel_distance = travel_distance + player.pos:dist(p[i]) 
+      else
+          travel_distance = travel_distance + p[i-1]:dist(p[i])
+      end
+    end
+    return travel_distance
+  end
+end
+
+
 function common.IsImmobileBuffer(unit, delay) 
     local BuffeTipe, TimerBuffer = {} , game.time + (delay or 0)
     for i = 0, unit.buffManager.count - 1 do
