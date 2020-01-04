@@ -540,6 +540,21 @@ local function find_place_and_insert(t, c, o, v)
   return c
 end
 
+local function CalcTravelDistance(pos, obj)
+  local obj = obj or player
+  if not pos then return end 
+  local p, n = player.path:calcPos(pos)
+  local total_dist = 0 
+  for i=0,n-1 do 
+      if i == 0 then 
+        total_dist = total_dist + player.pos:dist((p[i]))
+      else
+        total_dist = total_dist + p[i-1]:dist(p[i])
+      end
+  end
+  return total_dist 
+end
+
 local function check_add_minion(o)
   if valid_minion(o) then
     if o.team == TEAM_ALLY then

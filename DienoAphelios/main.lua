@@ -4,7 +4,7 @@ local pred = module.internal("pred");
 local ts = module.internal('TS');
 local common = module.load("daphelios", "common");
 local ObjMinion_Type = objManager.minions
-local version = "0.06_rc2"
+local version = "0.07_rc1"
 
 --Full changelogs are on my discord. Visit hanbot forums, my github, or pm dienofail#1100 on discord if you need an invite.
 
@@ -435,12 +435,12 @@ end
 
 function CountUltHit(PredictedPos, range)
   counter = 0 
-  hit_loc = vec3(PredictedPos.x, player.pos.z, PredictedPos.y)
+  hit_loc = vec3(PredictedPos.x, player.pos.y, PredictedPos.y)
   travel_time = player.pos:dist(hit_loc)/spellR.speed
   for _, obj in ipairs(common.GetEnemyHeroes()) do
       if obj and common.IsValidTarget(obj) then 
         pred_pos = pred.core.get_pos_after_time(obj, travel_time)
-        if hit_loc:dist(vec3(pred_pos.x,player.pos.z,pred_pos.y)) < range then 
+        if hit_loc:dist(vec3(pred_pos.x,player.pos.y,pred_pos.y)) < range then 
           counter = counter + 1
         end
       end
@@ -1005,13 +1005,13 @@ local function OnProcessSpell(spell)
         LastOrbPauseTime = 1 
         --common.ResetOrbDelay(1+0.01)
       end
-    elseif spell.isBasicAttack and spell.target ~= nil and player.sar == 1 and IsSeverumQ and spell.name:find("Line") then 
-      if menu.c.pause:get() and (game.time + 1) >= LastOrbPause + LastOrbPauseTime then 
-        orb.core.set_pause_attack(1)
+    --elseif spell.isBasicAttack and spell.target ~= nil and player.sar == 1 and IsSeverumQ and spell.name:find("Line") then 
+      --if menu.c.pause:get() and (game.time + 1) >= LastOrbPause + LastOrbPauseTime then 
+        --orb.core.set_pause_attack(1)
         --LastOrbPause = game.time 
         --LastOrbPauseTime = 1 
         --common.ResetOrbDelay(1+0.01)          
-      end
+      --end
     elseif qSpells[spell.name] and player.sar<10 and not spell.name:find("Line") and not spell.name ~= "ApheliosSeverumQ" then -- <= ??
       --start timer
       if menu.c.pause:get() and not IsSeverumQ and (game.time + 1 ) >= LastOrbPause + LastOrbPauseTime then 
@@ -1046,9 +1046,11 @@ local function OnProcessSpell(spell)
     elseif spell.name == "ApheliosSeverumQ" and not IsSeverumQ then 
       SeverumT = game.time + CalculateRealCD(SeverumCD[spell_level]) + 1.75 + spell.windUpTime
       if player.sar<10 then 
-        orb.core.set_pause_attack(1.75)
+        orb.core.set_pause(1.75+ spell.windUpTime)
+        --orb.core.set_pause_move(1.75+ spell.windUpTime)
       else
-        orb.core.set_pause_attack(1.75)
+        orb.core.set_pause(1.75+ spell.windUpTime)
+        --orb.core.set_pause_move(1.75+ spell.windUpTime)
       end
       if menu.d.printDebug:get() and spell.windUpTime > 0.1 and game.time - lastDebugPrint >0.01 then 
         print("ApheliosSeverumQ winduptime" .. tostring(common.round(spell.windUpTime,2)))
@@ -1087,8 +1089,8 @@ local function OnProcessSpell(spell)
       if menu.d.printDebug:get() and spell.windUpTime > 0.1 and game.time - lastDebugPrint >0.05  then 
         print("ApheliosCrescendumQ winduptime" .. tostring(common.round(spell.windUpTime,2)))
       end
-      common.ResetAllOrbDelay(spell.windUpTime)
-    elseif spell.name == "ApheliosW" and (game.time + spell.windUpTime) >= LastOrbPause + LastOrbPauseTime then 
+      --common.ResetAllOrbDelay(spell.windUpTime)
+    elseif spell.name == "ApheliosW" then 
       orb.core.set_pause_attack(spell.windUpTime) 
       --orb.core.set_pause_attack(spell.windUpTime)
       if menu.d.printDebug:get() and spell.windUpTime > 0.05 and game.time - lastDebugPrint >0.05 then 
@@ -1658,7 +1660,7 @@ local function AutoUlt()
       if seg_vec3 and SlowPredR(obj, segment) and common.IsValidTarget(obj) and CountUltHit(seg_vec3, 400) >= menu.c.ultNum:get() then 
         RLogic(obj, segment)
         if menu.d.printDebug:get() then
-            print("AutoUlt with min # for " .. tostring(CountUltHit(seg_vec3, 350)) .. " enemies")
+            print("AutoUlt with min # for " .. tostring(CountUltHit(seg_vec3, 400)) .. " enemies")
         end     
       end      
     end
@@ -1807,11 +1809,11 @@ local function AutoKS(target)
     end  
   end 
 
-  if Rdam and Rdam > 0 then 
-            if menu.d.printDebug:get() and game.time - lastDebugPrint > 0.01  then 
-                print(Rdam)
-            end
-  end
+  -- if Rdam and Rdam > 0 then 
+  --           if menu.d.printDebug:get() and game.time - lastDebugPrint > 0.01  then 
+  --               print(Rdam)
+  --           end
+  -- end
 
   --R KS
   if (menu.ks.useR:get() or menu.ks.useRsmart:get()) and IsSafe(150) and player.mana > 100 and player:spellSlot(3).state == 0 then
@@ -1988,7 +1990,8 @@ local function OnTick()
       player:move(mousePos) 
         --end
       LastMoveOrder = game.time 
-      LastFacingTick = game.time 
+      LastFacingTick = game.time
+      return 
       --common.ResetOrbDelay(cur_end_time - game.time)
       -- if menu.d.printDebug:get() then 
       --   print("returning aphelios lock3" .. tostring(common.round(cur_end_time - game.time ,2)))
@@ -1997,12 +2000,12 @@ local function OnTick()
     --elseif cur_end_time and cur_end_time - game.time > 0 then 
       --orb.core.set_pause_attack(cur_end_time - game.time)
     else 
-      if menu.d.printDebug:get() and game.time - LastFacingTick < 0.05 then 
-        print("Resetting ORB")
-      end
+      -- if menu.d.printDebug:get() and game.time - LastFacingTick < 0.05 then 
+      --   print("Resetting ORB")
+      -- end
       if game.time - LastFacingTick < 0.01 then 
         --orb.core.reset()
-        common.ResetOrb()
+        --common.ResetOrb()
       end
 
     end
