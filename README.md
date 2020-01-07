@@ -1,7 +1,7 @@
 # Dienofail's hanbot scripts repository
 Hanbot scripts by dienofail
 
-For the most updated version of scripts - come to my community discord! The versions are here are latest stable versions. THERE'S NO AUTOUPDATE IMPLEMENTED YET. Put script files into /lol-nd/scripts/ and .obj shard files into /lol-nd/shards/. 
+For the most updated version of scripts - come to my community discord! The versions are here are latest stable versions. Autoupdate has been implemented for Aphelios shard, you have to redownload utilities/elise until otherwise stated. Put script files into /lol-nd/scripts/ and .obj shard files into /lol-nd/shards/. 
 
 Currently supported:
 Elise
